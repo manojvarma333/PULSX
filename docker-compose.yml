@@ -1,0 +1,60 @@
+volumes:
+  pulsex_postgres_data:
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-pulsex}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-locally}
+      POSTGRES_DB: ${POSTGRES_DB:-pulsex}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pulsex_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pulsex} -d ${POSTGRES_DB:-pulsex}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-pulsex}:${POSTGRES_PASSWORD:-change-me-locally}@postgres:5432/${POSTGRES_DB:-pulsex}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "5173:80"
+    environment:
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  # Build-only by default (not started by `docker compose up`); run explicitly with:
+  #   docker compose --profile cpp run --rm cpp-worker --worker-id cpp-1 --host <host> --port 9000
+  # `<host>` must be an already-running PulseX experiment (started via the backend API or
+  # experiment_controller with worker_launch_mode="external"), since PulseX's TCP event
+  # server only exists for the lifetime of a single experiment run (see docs/architecture.md).
+  cpp-worker:
+    profiles: ["cpp"]
+    build:
+      context: ./workers/cpp

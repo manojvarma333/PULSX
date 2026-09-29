@@ -1,0 +1,27 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+
+# Local SQLite dev database (Postgres is used in Docker/production)
+*.db
+
+# Generated datasets can be large; keep the repo lean
+data/generated/*.csv
+!data/generated/.gitkeep
+
+# Node / frontend (future phases)
+node_modules/
+frontend/build/
+frontend/dist/
+
+# C++ build output (future phases)
+workers/cpp/build/
+
+# Env files
+.env
+
+# Editors / OS
+.DS_Store
